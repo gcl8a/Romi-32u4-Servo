@@ -17,20 +17,15 @@
  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#if defined(ARDUINO_ARCH_AVR)
-
 #include <avr/interrupt.h>
 #include <Arduino.h>
 
-#include "Servo.h"
+#include <Romi-32u4-servo.h>
 
 #define usToTicks(_us)    (( clockCyclesPerMicrosecond()* _us) / 8)     // converts microseconds to tick (assumes prescale of 8)  // 12 Aug 2009
 #define ticksToUs(_ticks) (( (unsigned)_ticks * 8)/ clockCyclesPerMicrosecond() ) // converts from ticks back to microseconds
 
-
 #define TRIM_DURATION       2                               // compensation ticks to trim adjust for digitalWrite delays // 12 August 2009
-
-//#define NBR_TIMERS        (MAX_SERVOS / SERVOS_PER_TIMER)
 
 static servo_t servos[MAX_SERVOS];                          // static array of servo structures
 static volatile int8_t Channel[_Nbr_16timers ];             // counter for the servo being pulsed for each timer (or -1 if refresh interval)
@@ -74,137 +69,26 @@ static inline void handle_interrupts(timer16_Sequence_t timer, volatile uint16_t
   }
 }
 
-#ifndef WIRING // Wiring pre-defines signal handlers so don't define any if compiling for the Wiring platform
-// Interrupt handlers for Arduino
-#if defined(_useTimer1)
-SIGNAL (TIMER1_COMPA_vect)
-{
-  handle_interrupts(_timer1, &TCNT1, &OCR1A);
-}
-#endif
-
-#if defined(_useTimer3)
 SIGNAL (TIMER3_COMPA_vect)
 {
   handle_interrupts(_timer3, &TCNT3, &OCR3A);
 }
-#endif
-
-#if defined(_useTimer4)
-SIGNAL (TIMER4_COMPA_vect)
-{
-  handle_interrupts(_timer4, &TCNT4, &OCR4A);
-}
-#endif
-
-#if defined(_useTimer5)
-SIGNAL (TIMER5_COMPA_vect)
-{
-  handle_interrupts(_timer5, &TCNT5, &OCR5A);
-}
-#endif
-
-#elif defined WIRING
-// Interrupt handlers for Wiring
-#if defined(_useTimer1)
-void Timer1Service()
-{
-  handle_interrupts(_timer1, &TCNT1, &OCR1A);
-}
-#endif
-#if defined(_useTimer3)
-void Timer3Service()
-{
-  handle_interrupts(_timer3, &TCNT3, &OCR3A);
-}
-#endif
-#endif
 
 
 static void initISR(timer16_Sequence_t timer)
 {
-#if defined (_useTimer1)
-  if(timer == _timer1) {
-    TCCR1A = 0;             // normal counting mode
-    TCCR1B = _BV(CS11);     // set prescaler of 8
-    TCNT1 = 0;              // clear the timer count
-#if defined(__AVR_ATmega8__)|| defined(__AVR_ATmega128__)
-    TIFR |= _BV(OCF1A);      // clear any pending interrupts
-    TIMSK |=  _BV(OCIE1A) ;  // enable the output compare interrupt
-#else
-    // here if not ATmega8 or ATmega128
-    TIFR1 |= _BV(OCF1A);     // clear any pending interrupts
-    TIMSK1 |=  _BV(OCIE1A) ; // enable the output compare interrupt
-#endif
-#if defined(WIRING)
-    timerAttach(TIMER1OUTCOMPAREA_INT, Timer1Service);
-#endif
-  }
-#endif
-
-#if defined (_useTimer3)
-  if(timer == _timer3) {
     TCCR3A = 0;             // normal counting mode
     TCCR3B = _BV(CS31);     // set prescaler of 8
     TCNT3 = 0;              // clear the timer count
-#if defined(__AVR_ATmega128__)
-    TIFR |= _BV(OCF3A);     // clear any pending interrupts
-	ETIMSK |= _BV(OCIE3A);  // enable the output compare interrupt
-#else
     TIFR3 = _BV(OCF3A);     // clear any pending interrupts
     TIMSK3 =  _BV(OCIE3A) ; // enable the output compare interrupt
-#endif
-#if defined(WIRING)
-    timerAttach(TIMER3OUTCOMPAREA_INT, Timer3Service);  // for Wiring platform only
-#endif
-  }
-#endif
-
-#if defined (_useTimer4)
-  if(timer == _timer4) {
-    TCCR4A = 0;             // normal counting mode
-    TCCR4B = _BV(CS41);     // set prescaler of 8
-    TCNT4 = 0;              // clear the timer count
-    TIFR4 = _BV(OCF4A);     // clear any pending interrupts
-    TIMSK4 =  _BV(OCIE4A) ; // enable the output compare interrupt
-  }
-#endif
-
-#if defined (_useTimer5)
-  if(timer == _timer5) {
-    TCCR5A = 0;             // normal counting mode
-    TCCR5B = _BV(CS51);     // set prescaler of 8
-    TCNT5 = 0;              // clear the timer count
-    TIFR5 = _BV(OCF5A);     // clear any pending interrupts
-    TIMSK5 =  _BV(OCIE5A) ; // enable the output compare interrupt
-  }
-#endif
 }
 
 static void finISR(timer16_Sequence_t timer)
 {
     //disable use of the given timer
-#if defined WIRING   // Wiring
-  if(timer == _timer1) {
-    #if defined(__AVR_ATmega1281__)||defined(__AVR_ATmega2561__)
-    TIMSK1 &=  ~_BV(OCIE1A) ;  // disable timer 1 output compare interrupt
-    #else
-    TIMSK &=  ~_BV(OCIE1A) ;  // disable timer 1 output compare interrupt
-    #endif
-    timerDetach(TIMER1OUTCOMPAREA_INT);
-  }
-  else if(timer == _timer3) {
-    #if defined(__AVR_ATmega1281__)||defined(__AVR_ATmega2561__)
-    TIMSK3 &= ~_BV(OCIE3A);    // disable the timer3 output compare A interrupt
-    #else
-    ETIMSK &= ~_BV(OCIE3A);    // disable the timer3 output compare A interrupt
-    #endif
-    timerDetach(TIMER3OUTCOMPAREA_INT);
-  }
-#else
   //For Arduino - in future: call here to a currently undefined function to reset the timer
   (void) timer;  // squash "unused parameter 'timer' [-Wunused-parameter]" warning
-#endif
 }
 
 static boolean isTimerActive(timer16_Sequence_t timer)
@@ -313,5 +197,3 @@ bool Servo::attached()
 {
   return servos[this->servoIndex].Pin.isActive ;
 }
-
-#endif // ARDUINO_ARCH_AVR

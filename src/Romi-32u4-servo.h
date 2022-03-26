@@ -45,8 +45,7 @@
     detach()    - Stops an attached servos from pulsing its I/O pin. 
  */
 
-#ifndef Servo_h
-#define Servo_h
+#pragma once
 
 #include <inttypes.h>
 
@@ -59,23 +58,7 @@
  */
 
 // Architecture specific include
-#if defined(ARDUINO_ARCH_AVR)
-#include "avr/ServoTimers.h"
-#elif defined(ARDUINO_ARCH_SAM)
-#include "sam/ServoTimers.h"
-#elif defined(ARDUINO_ARCH_SAMD)
-#include "samd/ServoTimers.h"
-#elif defined(ARDUINO_ARCH_STM32F4)
-#include "stm32f4/ServoTimers.h"
-#elif defined(ARDUINO_ARCH_NRF52)
-#include "nrf52/ServoTimers.h"
-#elif defined(ARDUINO_ARCH_MEGAAVR)
-#include "megaavr/ServoTimers.h"
-#elif defined(ARDUINO_ARCH_MBED)
-#include "mbed/ServoTimers.h"
-#else
-#error "This library only supports boards with an AVR, SAM, SAMD, NRF52 or STM32F4 processor."
-#endif
+typedef enum { _timer3, _Nbr_16timers } timer16_Sequence_t;
 
 #define Servo_VERSION           2     // software version of this library
 
@@ -88,8 +71,6 @@
 #define MAX_SERVOS   (_Nbr_16timers  * SERVOS_PER_TIMER)
 
 #define INVALID_SERVO         255     // flag indicating an invalid servo index
-
-#if !defined(ARDUINO_ARCH_STM32F4)
 
 typedef struct  {
   uint8_t nbr        :6 ;             // a pin number from 0 to 63
@@ -118,6 +99,3 @@ private:
    int8_t min;                       // minimum is this value times 4 added to MIN_PULSE_WIDTH    
    int8_t max;                       // maximum is this value times 4 added to MAX_PULSE_WIDTH   
 };
-
-#endif
-#endif
