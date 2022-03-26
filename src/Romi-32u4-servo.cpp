@@ -22,8 +22,8 @@
 
 #include <Romi-32u4-servo.h>
 
-#define usToTicks(_us)    (( clockCyclesPerMicrosecond()* _us) / 8)     // converts microseconds to tick (assumes prescale of 8)  // 12 Aug 2009
-#define ticksToUs(_ticks) (( (unsigned)_ticks * 8)/ clockCyclesPerMicrosecond() ) // converts from ticks back to microseconds
+#define usToTicks(_us)    (2 * _us)     // converts microseconds to tick (assumes prescale of 8)  // 12 Aug 2009
+#define ticksToUs(_ticks) ((unsigned)_ticks / 2 ) // converts from ticks back to microseconds
 
 #define TRIM_DURATION       2                               // compensation ticks to trim adjust for digitalWrite delays // 12 August 2009
 
