@@ -22,21 +22,21 @@
 
 #include <Romi-32u4-servo.h>
 
-#define usToTicks(_us)    (2 * _us)     // converts microseconds to tick (assumes prescale of 8)  // 12 Aug 2009
-#define ticksToUs(_ticks) ((unsigned)_ticks / 2 ) // converts from ticks back to microseconds
+#define usToTicks(_us)    (_us << 1)     // converts microseconds to tick (assumes prescale of 8)  // 12 Aug 2009
+#define ticksToUs(_ticks) ((unsigned)_ticks >> 1 ) // converts from ticks back to microseconds
 
 #define TRIM_DURATION       2                               // compensation ticks to trim adjust for digitalWrite delays // 12 August 2009
 
 static servo_t servos[MAX_SERVOS];                          // static array of servo structures
-static volatile int8_t Channel[_Nbr_16timers ];             // counter for the servo being pulsed for each timer (or -1 if refresh interval)
+static volatile int8_t Channel;//[_Nbr_16timers ];             // counter for the servo being pulsed for each timer (or -1 if refresh interval)
 
 uint8_t ServoCount = 0;                                     // the total number of attached servos
 
 
 // convenience macros
-#define SERVO_INDEX_TO_TIMER(_servo_nbr) ((timer16_Sequence_t)(_servo_nbr / SERVOS_PER_TIMER)) // returns the timer controlling this servo
-#define SERVO_INDEX_TO_CHANNEL(_servo_nbr) (_servo_nbr % SERVOS_PER_TIMER)       // returns the index of the servo on this timer
-#define SERVO_INDEX(_timer,_channel)  ((_timer*SERVOS_PER_TIMER) + _channel)     // macro to access servo index by timer and channel
+#define SERVO_INDEX_TO_TIMER(_servo_nbr) ((timer16_Sequence_t)(_servo_nbr / MAX_SERVOS)) // returns the timer controlling this servo
+#define SERVO_INDEX_TO_CHANNEL(_servo_nbr) (_servo_nbr % MAX_SERVOS)       // returns the index of the servo on this timer
+#define SERVO_INDEX(_timer,_channel)  ((_timer*MAX_SERVOS) + _channel)     // macro to access servo index by timer and channel
 #define SERVO(_timer,_channel)  (servos[SERVO_INDEX(_timer,_channel)])            // macro to access servo class by timer and channel
 
 #define SERVO_MIN() (MIN_PULSE_WIDTH - this->min * 4)  // minimum value in us for this servo
@@ -46,18 +46,18 @@ uint8_t ServoCount = 0;                                     // the total number 
 
 static inline void handle_interrupts(timer16_Sequence_t timer, volatile uint16_t *TCNTn, volatile uint16_t* OCRnA)
 {
-  if( Channel[timer] < 0 )
+  if( Channel < 0 )
     *TCNTn = 0; // channel set to -1 indicated that refresh interval completed so reset the timer
   else{
-    if( SERVO_INDEX(timer,Channel[timer]) < ServoCount && SERVO(timer,Channel[timer]).Pin.isActive == true )
-      digitalWrite( SERVO(timer,Channel[timer]).Pin.nbr,LOW); // pulse this channel low if activated
+    if( SERVO_INDEX(timer,Channel) < ServoCount && SERVO(timer,Channel).Pin.isActive == true )
+      digitalWrite( SERVO(timer,Channel).Pin.nbr,LOW); // pulse this channel low if activated
   }
 
-  Channel[timer]++;    // increment to the next channel
-  if( SERVO_INDEX(timer,Channel[timer]) < ServoCount && Channel[timer] < SERVOS_PER_TIMER) {
-    *OCRnA = *TCNTn + SERVO(timer,Channel[timer]).ticks;
-    if(SERVO(timer,Channel[timer]).Pin.isActive == true)     // check if activated
-      digitalWrite( SERVO(timer,Channel[timer]).Pin.nbr,HIGH); // its an active channel so pulse it high
+  Channel++;    // increment to the next channel
+  if( SERVO_INDEX(timer,Channel) < ServoCount && Channel < MAX_SERVOS) {
+    *OCRnA = *TCNTn + SERVO(timer,Channel).ticks;
+    if(SERVO(timer,Channel).Pin.isActive == true)     // check if activated
+      digitalWrite( SERVO(timer,Channel).Pin.nbr,HIGH); // its an active channel so pulse it high
   }
   else {
     // finished all channels so wait for the refresh period to expire before starting over
@@ -65,7 +65,7 @@ static inline void handle_interrupts(timer16_Sequence_t timer, volatile uint16_t
       *OCRnA = (unsigned int)usToTicks(REFRESH_INTERVAL);
     else
       *OCRnA = *TCNTn + 4;  // at least REFRESH_INTERVAL has elapsed
-    Channel[timer] = -1; // this will get incremented at the end of the refresh period to start again at the first channel
+    Channel = -1; // this will get incremented at the end of the refresh period to start again at the first channel
   }
 }
 
@@ -94,7 +94,7 @@ static void finISR(timer16_Sequence_t timer)
 static boolean isTimerActive(timer16_Sequence_t timer)
 {
   // returns true if any servo is active on this timer
-  for(uint8_t channel=0; channel < SERVOS_PER_TIMER; channel++) {
+  for(uint8_t channel=0; channel < MAX_SERVOS; channel++) {
     if(SERVO(timer,channel).Pin.isActive == true)
       return true;
   }
@@ -145,7 +145,7 @@ void Servo::detach()
   }
 }
 
-void Servo::write(int value)
+void Servo::write(uint16_t value)
 {
   if(value < MIN_PULSE_WIDTH)
   {  // treat values less than 544 as angles in degrees (valid values in microseconds are handled as microseconds)
@@ -156,7 +156,7 @@ void Servo::write(int value)
   this->writeMicroseconds(value);
 }
 
-void Servo::writeMicroseconds(int value)
+void Servo::writeMicroseconds(uint16_t value)
 {
   // calculate and store the values for the given channel
   byte channel = this->servoIndex;
